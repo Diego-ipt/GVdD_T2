@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarea 2 Cauchy</title>
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<script src="nav.js"></script>
+<main>
+<h1>Tarea 2: sketch de Cauchy</h1>
+<p class="sub">Tópicos en Grandes Volúmenes de Datos 2026. Cómo estimar cuánto cambia el tráfico de una red con $k$ números por intervalo.</p>
+
+<div class="nota">Esta carpeta explica la tarea y todo lo generado en el repositorio. Abre las páginas en orden la primera vez; después sirven como referencia.</div>
+
+<div class="grid">
+<div class="card"><h3><a href="01_tarea.html">1. Qué pide la tarea</a></h3>Objetivo, datos, actividades, entregables y rúbrica, con el archivo que resuelve cada exigencia.</div>
+<div class="card"><h3><a href="02_sketch_cauchy.html">2. Sketch de Cauchy</a></h3>1-estabilidad, por qué la mediana, error $\pi/(2\sqrt k)$, splitmix64 y la matriz implícita.</div>
+<div class="card"><h3><a href="03_cache.html">3. Caché</a></h3>Diseño de mapeo directo: pseudocódigo, invariante, argumento de exactitud y $\phi_B$.</div>
+<div class="card"><h3><a href="04_codigo.html">4. Código y ejecución</a></h3>Estructura del repositorio, programas, opciones, decisiones de implementación y cómo correr todo en WSL.</div>
+<div class="card"><h3><a href="05_resultados.html">5. Resultados</a></h3>Verificaciones, error contra $k$ y $T$, $r_q$, memoria, caché, comparación entre días y día 30.</div>
+<div class="card"><h3><a href="06_informe.html">6. Informe y preguntas</a></h3>Respuestas a las 4 preguntas obligatorias, estructura del informe y checklist de entrega.</div>
+</div>
+
+<h2>Estado de la tarea</h2>
+<table>
+<tr><th>Pieza</th><th>Estado</th></tr>
+<tr><td>Descarga y conversión de las 3 trazas</td><td class="ok">Listo</td></tr>
+<tr><td>Sketch de Cauchy + caché (C++)</td><td class="ok">Listo y verificado contra los valores de referencia del PDF</td></tr>
+<tr><td>Referencia exacta</td><td class="ok">Listo</td></tr>
+<tr><td>Experimentos Act. 2.1 y 2.2</td><td class="ok">Listos (ver <a href="05_resultados.html">Resultados</a>)</td></tr>
+<tr><td>Informe LaTeX (<code>informe/main.tex</code>)</td><td>Redactado; falta compilarlo y confirmar los integrantes (ver <a href="06_informe.html">Informe</a>)</td></tr>
+<tr><td>Presentación oral (10 min)</td><td>Pendiente (la preparan ustedes)</td></tr>
+</table>
+</main>
+<script>MathJax = { tex: { inlineMath: [['$', '$']] } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+</body>
+</html>

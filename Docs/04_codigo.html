@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Código y ejecución</title>
+<link rel="stylesheet" href="estilo.css">
+<script>MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<script src="nav.js"></script>
+<main>
+<h1>4. Código y ejecución</h1>
+<p class="sub">Qué hace cada archivo del repositorio y cómo correr todo.</p>
+
+<h2>Estructura del repositorio</h2>
+<pre><code>GVdD_T2/
+├── reproducir.sh              ← corre TODO (experimentos + tablas + figuras)
+├── Makefile                   ← compila bin/*
+├── requirements.txt           ← numpy, pandas, matplotlib
+├── src/
+│   ├── cauchy.hpp             ← Mezclar, Entrada, Sketch, EstimarDistancia, Cache
+│   ├── traza.hpp              ← lector de registros de 24 B
+│   ├── verify.cpp             ← Actividad 1.2 (verificaciones)
+│   ├── cauchy_intervals.cpp   ← Algoritmo 2 con sketch + caché
+│   ├── exact_intervals.cpp    ← referencia exacta (tablas hash)
+│   └── perfil.cpp             ← perfil de cada traza (protocolos, puertos, escaneos)
+├── tools/pcap2bin.cpp         ← conversor de la Tarea 1
+├── scripts/
+│   ├── descargar_trazas.sh    ← descarga MAWI (reanudable, verifica tamaño y gzip)
+│   ├── convertir_trazas.sh    ← .pcap.gz → .bin
+│   ├── analisis.py            ← tablas, figuras, resumen.json
+│   └── traza_sintetica.py     ← traza de prueba
+├── trazas/                    ← (no versionado) .pcap.gz y .bin
+├── resultados/                ← CSV, tablas, figuras
+├── informe/main.tex           ← informe
+└── Docs/                      ← esta documentación</code></pre>
+
+<h2>Flujo de datos</h2>
+<pre><code>MAWI .pcap.gz ──descargar_trazas.sh──► trazas/*.pcap.gz
+      │ convertir_trazas.sh (gzip -dc | pcap2bin)
+      ▼
+trazas/*.bin (24 B/paquete: ts_us, src, dst, sport, dport, len, proto, flags)
+      │
+      ├── verify ──────────────────► resultados/verificacion/
+      ├── exact_intervals consec ──► resultados/act21/exact_d26*.csv      (L_q exacto)
+      ├── cauchy_intervals ×5 σ ───► resultados/act21/est_d26_s*.csv      (L̂_q, k=32/128/512)
+      │       └─ --save-sketches ──► resultados/sketches/*.sk             (para 2.2)
+      ├── exact_intervals cross ───► resultados/act22/                    (entre días, top IPs)
+      └── cauchy_intervals --preload (B=256/4096/65536/0) ► act21/bench.csv (φ_B, throughput)
+                      │
+                      ▼
+            scripts/analisis.py ──► resultados/tablas, resultados/figuras, resumen.json</code></pre>
+
+<h2>Cómo ejecutar (Windows + WSL)</h2>
+<p>El código es C++17 para Linux, igual que en la Tarea 1. En Windows se corre dentro de WSL Ubuntu:</p>
+<pre><code># desde PowerShell
+wsl -d Ubuntu
+# dentro de WSL
+cd "/mnt/d/Universidad/10mo semestre/Topicos/GVdD_T2"
+./reproducir.sh</code></pre>
+<div class="aviso">PowerShell no ejecuta archivos <code>.sh</code>: los abre con otra aplicación y no pasa nada. Usa siempre WSL o Git Bash, y lanza los scripts <strong>desde la raíz del repositorio</strong>.</div>
+
+<h3>Comandos sueltos útiles</h3>
+<pre><code>make                                     # compila todo en bin/
+./bin/verify --outdir resultados/verificacion --trace trazas/201801261400.bin
+
+# sketch: todos los T en una pasada, k=512 con prefijos 32 y 128
+./bin/cauchy_intervals --trace trazas/201801261400.bin --T 10,30,60,120 \
+    --k 512 --seed 1 --B 4096 --kprefix 32,128,512 \
+    --out est.csv --resumen resumen.csv [--save-sketches pref] [--preload] [--max-intervals N]
+
+# referencia exacta
+./bin/exact_intervals consec --trace trazas/201801261400.bin --T 10,30,60,120 --out exact.csv --resumen r.csv
+./bin/exact_intervals cross --a trazas/201801261400.bin --b trazas/201801301400.bin --T 60 \
+    --out por_q.csv --total total.csv --top 20 --top-out top.csv</code></pre>
+
+<h2>Decisiones de implementación</h2>
+<ul>
+<li><strong>Un solo $k=512$ y prefijos:</strong> como <code>Entrada</code> no depende de $k$, las primeras $k'$ filas forman un sketch válido. Una corrida con $k=512$ entrega también $k=32$ y $k=128$ (<code>--kprefix</code>).</li>
+<li><strong>Todos los $T$ en una pasada:</strong> cada $T$ tiene sus propios sketches A y P y su propia caché. Se lee la traza una sola vez por semilla.</li>
+<li><strong>Semillas en paralelo:</strong> <code>reproducir.sh</code> lanza las 5 semillas como procesos independientes.</li>
+<li><strong>Semillas de fila precalculadas:</strong> $g_j=\text{Mezclar}(\text{Mezclar}(\sigma)\oplus j)$ se calcula una vez por sketch. Por paquete, o por descarga de la caché, solo quedan $k$ llamadas a Mezclar y a $\tan$.</li>
+<li><strong>Throughput:</strong> se mide con la traza precargada en RAM (<code>--preload</code>) y en serie, para no medir la lectura del disco. El caso sin caché se mide sobre un solo intervalo (<code>--max-intervals 1</code>).</li>
+<li><strong>Último intervalo:</strong> no se compara (Algoritmo 2). Con <code>--save-sketches</code> se vacía y se guarda con la marca <code>cerrado=0</code>, para poder sumar la traza completa en la Actividad 2.2.</li>
+<li><strong>Referencia exacta:</strong> <code>std::unordered_map&lt;uint32_t,uint64_t&gt;</code> por intervalo, con la misma regla de intervalos que el sketch. Su memoria se estima como 32 B por nodo más 8 B por bucket, y se reporta el máximo sobre los intervalos.</li>
+</ul>
+
+<h2>Formato del archivo de sketches (<code>.sk</code>)</h2>
+<pre><code>"CSK1" | k:uint32 | sigma:uint64 | T:double
+repetido por intervalo:  q:uint32 | cerrado:uint8 | N:uint64 | y[k]:double</code></pre>
+<p><code>scripts/analisis.py</code> (función <code>leer_sketches</code>) lo lee para las comparaciones entre días.</p>
+</main>
+</body>
+</html>

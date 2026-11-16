@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qué pide la tarea</title>
+<link rel="stylesheet" href="estilo.css">
+<script>MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<script src="nav.js"></script>
+<main>
+<h1>1. Qué pide la tarea</h1>
+<p class="sub">Resumen del enunciado <code>Tarea2_2026_TMGVD.pdf</code>, con cada exigencia y el lugar del repositorio donde se resuelve.</p>
+
+<h2>El problema</h2>
+<p>En la Tarea 1 se estimaba la frecuencia de <em>una</em> IP. Ahora se estima una cantidad <strong>global</strong>: cuánto cambió el tráfico entre dos intervalos de tiempo. Si $a$ y $b$ son los vectores de cuentas de paquetes por IP de destino en dos intervalos, el cambio total es</p>
+<p>$$\|a-b\|_1 = \sum_i |a_i - b_i|.$$</p>
+<p>Los paquetes llegan como un stream, y guardar $a$ y $b$ completos significaría tablas con millones de IPs. El <strong>sketch de Cauchy</strong> (Indyk, 2000) resume cada vector en solo $k$ números reales (por ejemplo, $k=128$ son 1 KiB) y permite estimar $\|a-b\|_1$ con un error relativo cercano a $\pi/(2\sqrt k)$.</p>
+<div class="nota"><strong>La clave siempre es la IP de destino.</strong></div>
+
+<h2>Datos</h2>
+<p>Se usan tres trazas de 15 minutos del archivo MAWI, punto de captura <em>samplepoint-F</em>, todas de las 14:00 h:</p>
+<table>
+<tr><th>Archivo</th><th>Día (2018)</th><th class="n">Paquetes (PDF)</th><th>Uso</th></tr>
+<tr><td class="mono">201801251400.pcap.gz</td><td>jue 25 ene</td><td class="n">107,8 M</td><td>Act. 2.2</td></tr>
+<tr><td class="mono">201801261400.pcap.gz</td><td>vie 26 ene</td><td class="n">106,5 M</td><td>Act. 2.1 y 2.2</td></tr>
+<tr><td class="mono">201801301400.pcap.gz</td><td>mar 30 ene</td><td class="n">95,7 M</td><td>Act. 2.2 (contraste)</td></tr>
+</table>
+<p>Fuente: <a href="https://mawi.wide.ad.jp/mawi/samplepoint-F/2018/">mawi.wide.ad.jp/mawi/samplepoint-F/2018/</a>. Se convierten con <code>pcap2bin</code> (de la Tarea 1) a registros binarios de 24 bytes, y los paquetes IPv6 se descartan. Las trazas <strong>no se suben al repositorio</strong>.</p>
+<p>En el repositorio: <code>scripts/descargar_trazas.sh</code> descarga y verifica los archivos, y <code>scripts/convertir_trazas.sh</code> los convierte a <code>trazas/*.bin</code>.</p>
+
+<h2>Actividad 1: implementación y validación (2,5 pts)</h2>
+<table>
+<tr><th>Exigencia</th><th>Dónde se resuelve</th></tr>
+<tr><td>Sketch de Cauchy según el Algoritmo 1 (Mezclar = splitmix64, Entrada, Actualizar, EstimarDistancia con la mediana)</td><td><code>src/cauchy.hpp</code></td></tr>
+<tr><td>Caché de diseño propio con $k$, $\sigma$ y $B$ configurables</td><td><code>src/cauchy.hpp</code> (struct <code>Cache</code>); ver <a href="03_cache.html">3. Caché</a></td></tr>
+<tr><td>Verificar que mediana$(|C_{ji}|)\approx 1$ sobre al menos $10^6$ entradas</td><td><code>src/verify.cpp</code>, prueba 1</td></tr>
+<tr><td>Verificar que la misma $(\sigma,j,i)$ da siempre el mismo valor</td><td><code>verify</code>, prueba 2</td></tr>
+<tr><td>Verificar que un sketch con una sola IP de cuenta $c$, comparado con uno vacío, da $\hat L\approx c$</td><td><code>verify</code>, prueba 3</td></tr>
+<tr><td>Verificar que, con $B=4096$, $\hat L$ coincide con el obtenido llamando a Actualizar por cada paquete (T = 10 s), y reportar la diferencia relativa</td><td><code>verify</code>, prueba 4</td></tr>
+<tr><td>Referencia exacta con tablas hash: $N_q$ y $L_q$</td><td><code>src/exact_intervals.cpp</code></td></tr>
+</table>
+
+<h2>Actividad 2.1: intervalos consecutivos, día 26</h2>
+<p>La traza se corta en intervalos de largo $T$. El intervalo $q$ cubre $(t_0+(q-1)T,\ t_0+qT]$, y el primer paquete pertenece al intervalo 1. Para cada $q\ge 2$ se estiman</p>
+<p>$$L_q = \|x_q - x_{q-1}\|_1, \qquad r_q = \frac{L_q}{N_q + N_{q-1}} \in [0,1].$$</p>
+<p>Se usan $T\in\{10,30,60,120\}$ s, $k\in\{32,128,512\}$ y al menos 5 semillas. Hay que entregar:</p>
+<ul>
+<li>el error relativo $|\hat L_q - L_q|/L_q$: su media y su percentil 95;</li>
+<li>la desviación estándar de $\hat L_q/L_q$, comparada con $\pi/(2\sqrt k)$;</li>
+<li>un gráfico de $r_q$ exacto y estimado a lo largo de la traza, con un panel por $T$;</li>
+<li>la memoria del algoritmo ($2k$ doubles más la caché) frente a la de la tabla hash exacta;</li>
+<li>con $T = 60$ s y $k = 512$, la fracción de llamadas $\phi_B$ y el throughput para $B\in\{256, 4096, 65536\}$ y sin caché;</li>
+<li>la duración $D$ de la traza y la verificación de que se emiten exactamente $Q-2$ comparaciones, con $Q=\lceil D/T\rceil$.</li>
+</ul>
+
+<h2>Actividad 2.2: comparación entre días</h2>
+<ul>
+<li>Procesar los días 25 y 26 con la <strong>misma semilla</strong> y $T=60$ s, guardando el sketch de cada intervalo.</li>
+<li>Estimar $\|x^{25}_q - x^{26}_q\|_1$ por intervalo (cada traza con su propio $t_0$) y compararlo con el valor exacto.</li>
+<li>Estimar el cambio entre las trazas completas <strong>sumando los sketches</strong>, gracias a la linealidad, sin olvidar el último intervalo, que queda abierto.</li>
+<li>Comparar el $r$ entre días con el $r$ entre minutos consecutivos, y $\hat L$ con $|N^{25}-N^{26}|$.</li>
+<li>Repetir con <strong>semillas distintas</strong> para cada día y explicar qué ocurre.</li>
+<li>Contraste: días 26 y 30. Identificar las IPs que más aportan a $L$ y caracterizar ese tráfico (protocolo, puertos). ¿Qué cambió el día 30?</li>
+</ul>
+
+<h2>Preguntas obligatorias</h2>
+<ol>
+<li>¿Por qué la 1-estabilidad permite estimar $\|a-b\|_1$ con la mediana, y por qué no sirve el promedio?</li>
+<li>¿Coincide el error observado con $\pi/(2\sqrt k)$? ¿Depende de $T$? Compárenlo con el de CMS y CountSketch de la Tarea 1.</li>
+<li>¿Por qué dos routers que quieren comparar su tráfico deben usar la misma semilla?</li>
+<li>¿Qué agrega $\|a-b\|_1$ respecto de $|N_a-N_b|$? Den un ejemplo de un cambio que la segunda medida no detecte.</li>
+</ol>
+<p>Las respuestas, basadas en nuestros resultados, están en <a href="06_informe.html">6. Informe y preguntas</a>.</p>
+
+<h2>Entregables y rúbrica</h2>
+<div class="grid">
+<div class="card"><h3>Repositorio</h3>Código del sketch, de la referencia exacta y de los experimentos; <code>README.md</code>; <code>reproducir.sh</code>, comentado, que genere todas las figuras y tablas sin intervención manual.</div>
+<div class="card"><h3>Informe</h3>Máximo 6 páginas sin anexos: Encabezado, Implementación, Intervalos consecutivos, Comparación entre días, Preguntas, Conclusiones. Está en <code>informe/main.tex</code>.</div>
+<div class="card"><h3>Presentación</h3>10 minutos por grupo.</div>
+</div>
+<table>
+<tr><th>Criterio</th><th class="n">Puntos</th></tr>
+<tr><td>Sketch correcto (semilla, actualización, mediana)</td><td class="n">0,70</td></tr>
+<tr><td>Diseño de la caché (requisitos, invariante, exactitud)</td><td class="n">0,30</td></tr>
+<tr><td>Verificación de pesos, sketch y caché</td><td class="n">0,60</td></tr>
+<tr><td>Referencia exacta</td><td class="n">0,90</td></tr>
+<tr><td>Intervalos consecutivos (error vs k y T, figuras, memoria, caché)</td><td class="n">1,20</td></tr>
+<tr><td>Comparación entre días y caracterización del día 30</td><td class="n">0,80</td></tr>
+<tr><td>Discusión, preguntas y reproducibilidad</td><td class="n">0,50</td></tr>
+<tr><td>Presentación oral</td><td class="n">1,00</td></tr>
+<tr><th>Total</th><th class="n">6,0</th></tr>
+</table>
+<p>Fecha de entrega: <strong>lunes 30 de noviembre de 2026, 23:59</strong>. Grupos de 3 estudiantes.</p>
+</main>
+</body>
+</html>

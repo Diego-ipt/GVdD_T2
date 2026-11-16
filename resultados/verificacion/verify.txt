@@ -1,0 +1,44 @@
+0. Valores de referencia
+  Mezclar(0) = 0xE220A8397B1DCDAF (esperado 0xE220A8397B1DCDAF)
+  [OK] Mezclar(0)
+  Entrada(42,1,192.168.0.1) = -0.889927650 (esperado -0.889927650)
+  [OK] valor de referencia
+  Entrada(42,2,192.168.0.1) = -2.088573016 (esperado -2.088573016)
+  [OK] valor de referencia
+  Entrada(42,3,192.168.0.1) = -26.926917514 (esperado -26.926917514)
+  [OK] valor de referencia
+  [OK] Sketch::actualizar coincide con Entrada()
+1. Distribución de los pesos
+  N = 2500000 entradas, mediana(|C|) = 0.99858
+  [OK] mediana(|C_ji|) ~ 1 (tolerancia 0.01)
+  cuantil 0.050 de |C|: empírico 0.0782, teórico 0.0787
+  cuantil 0.100 de |C|: empírico 0.1579, teórico 0.1584
+  cuantil 0.250 de |C|: empírico 0.4130, teórico 0.4142
+  cuantil 0.500 de |C|: empírico 0.9986, teórico 1.0000
+  cuantil 0.750 de |C|: empírico 2.4102, teórico 2.4142
+  cuantil 0.900 de |C|: empírico 6.2895, teórico 6.3138
+  cuantil 0.950 de |C|: empírico 12.6552, teórico 12.7062
+  cuantil 0.990 de |C|: empírico 63.8655, teórico 63.6567
+  cuantil 0.999 de |C|: empírico 650.4770, teórico 636.6192
+2. Determinismo
+  [OK] 10^5 triples (sigma,j,i) re-evaluados en otro orden dan el mismo valor
+  sketch con 1000 IPs en orden directo vs inverso: max dif. relativa 1.477e-13
+  [OK] el orden de llegada no importa (salvo redondeo)
+3. Una IP con cuenta c contra sketch vacío
+  k= 32: media(Lhat/c) = 1.0403, desv = 0.2959 (teórica pi/(2 sqrt k) = 0.2777)
+  [OK] Lhat ~ c en promedio
+  k=128: media(Lhat/c) = 1.0045, desv = 0.1362 (teórica pi/(2 sqrt k) = 0.1388)
+  [OK] Lhat ~ c en promedio
+  k=512: media(Lhat/c) = 0.9901, desv = 0.0652 (teórica pi/(2 sqrt k) = 0.0694)
+  [OK] Lhat ~ c en promedio
+4. Caché
+  sintética B=7: Lhat 204810.492 vs 204810.492, max dif rel en y 1.24e-14, phi=0.991
+  [OK] caché sintética exacta salvo redondeo
+  traza, T=10 s, intervalos 1-2, k=32: Lhat cache 857251.8664 vs directo 857251.8664, dif rel 3.93e-12
+  [OK] Lhat con caché = Lhat sin caché (salvo redondeo)
+  traza, T=10 s, intervalos 1-2, k=128: Lhat cache 867308.5042 vs directo 867308.5042, dif rel 3.63e-12
+  [OK] Lhat con caché = Lhat sin caché (salvo redondeo)
+  traza, T=10 s, intervalos 1-2, k=512: Lhat cache 877546.7951 vs directo 877546.7951, dif rel 2.93e-13
+  [OK] Lhat con caché = Lhat sin caché (salvo redondeo)
+  paquetes en los 2 intervalos: 2418975, llamadas con caché: 501111 (phi=0.2072)
+TODO OK (0 fallas)

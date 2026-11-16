@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diseño de la caché</title>
+<link rel="stylesheet" href="estilo.css">
+<script>MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<script src="nav.js"></script>
+<main>
+<h1>3. Diseño de la caché</h1>
+<p class="sub">La parte de diseño propio de la tarea: estructura, pseudocódigo, invariante y argumento de exactitud.</p>
+
+<h2>Por qué hace falta</h2>
+<p>Actualizar cuesta $k$ evaluaciones de $\tan$: 512 por paquete con $k=512$. Como el tráfico se concentra en pocas IPs, la misma IP de destino aparece muchas veces seguidas. Por linealidad, sumar $c$ veces la columna $C_{\cdot,i}$ es lo mismo que sumarla una vez multiplicada por $c$. La caché <strong>acumula cuentas</strong> y llama a <code>Actualizar(S, i, c)</code> una sola vez por grupo de paquetes.</p>
+
+<h2>Estructura elegida: caché de mapeo directo</h2>
+<p>Un arreglo de $B$ ranuras <code>(ip, c)</code>. La IP $i$ solo puede vivir en la ranura $h(i) = \lfloor \text{fmix32}(i)\cdot B / 2^{32}\rfloor$, donde fmix32 es el finalizador de 32 bits de MurmurHash3. Una ranura con $c = 0$ está vacía. Ocupa $8B$ bytes: 32 KiB con $B = 4096$.</p>
+<pre><code>InicializarCaché(B):
+  K.ip[0..B-1] ← 0;  K.c[0..B-1] ← 0
+
+Registrar(S, K, i):                      // O(1) peor caso
+  r ← h(i)
+  si K.c[r] &gt; 0 y K.ip[r] = i:           // acierto: solo acumula
+      K.c[r] ← K.c[r] + 1
+  si no:
+      si K.c[r] &gt; 0:                      // expulsión: descarga al sketch
+          Actualizar(S, K.ip[r], K.c[r])
+      K.ip[r] ← i;  K.c[r] ← 1
+
+Vaciar(S, K):                            // O(B) + llamadas
+  para r ← 0 .. B-1:
+      si K.c[r] &gt; 0:
+          Actualizar(S, K.ip[r], K.c[r]);  K.c[r] ← 0</code></pre>
+<p>(El código además descarga una ranura si la cuenta llega a $2^{32}-1$, para que el contador de 32 bits no se desborde. Con estas trazas nunca ocurre.)</p>
+<p>Con <code>B = 0</code> no hay caché: <code>Registrar</code> llama directamente a <code>Actualizar(S, i, 1)</code>. Ese es el caso "sin caché" del benchmark.</p>
+
+<h2>Invariante</h2>
+<div class="card">
+<p>Sea $x^{\text{reg}}$ el vector de paquetes registrados desde el último reinicio del sketch y $x^{K}$ el contenido de la caché ($x^K_i = K.c[r]$ si $K.ip[r]=i$ y $K.c[r]>0$, y 0 en otro caso). Entonces, en todo momento,</p>
+<p>$$S.y \;=\; C\,\big(x^{\text{reg}} - x^{K}\big).$$</p>
+<p>En palabras: <strong>cada paquete registrado está o bien en el sketch o bien en la caché, nunca en ambos ni en ninguno.</strong></p>
+</div>
+
+<h2>Argumento de exactitud</h2>
+<ul>
+<li><strong>Inicio:</strong> $S.y=0$, $x^{\text{reg}}=0$ y $x^K = 0$. El invariante se cumple.</li>
+<li><strong>Registrar, acierto:</strong> $x^{\text{reg}}_i$ y $x^K_i$ suben en 1 y $S.y$ no cambia. La diferencia se mantiene.</li>
+<li><strong>Registrar, ranura vacía:</strong> igual que un acierto: $x^K_i$ pasa de 0 a 1.</li>
+<li><strong>Registrar, expulsión de $(i', c')$:</strong> <code>Actualizar</code> suma $c' C_{\cdot,i'}$ a $S.y$ y $x^K_{i'}$ baja de $c'$ a 0, así que $C(x^{\text{reg}}-x^K)$ sube exactamente en $c'C_{\cdot,i'}$. Luego se inserta $(i,1)$, como en el caso anterior.</li>
+<li><strong>Vaciar:</strong> cada ranura ocupada se descarga como en la expulsión. Al final $x^K=0$.</li>
+</ul>
+<p>Por lo tanto, después de <code>Vaciar</code>, $S.y = C\,x^{\text{reg}}$, que es exactamente lo que se obtendría llamando a <code>Actualizar(S,i,1)</code> por cada paquete. La única diferencia es el redondeo de punto flotante, porque cambia el orden de las sumas y se multiplica $c\cdot C_{ji}$ en vez de sumar $c$ veces. Ningún paquete se pierde ni se cuenta dos veces.</p>
+
+<h2>Requisitos del enunciado</h2>
+<table>
+<tr><th>Requisito</th><th>Cómo se cumple</th></tr>
+<tr><td>1. Exactitud</td><td>Invariante anterior, verificado empíricamente con <code>verify</code> (prueba 4): con $B=4096$, T = 10 s, día 26, la diferencia relativa de $\hat L$ es del orden de $10^{-15}$.</td></tr>
+<tr><td>2. Memoria fija</td><td>Dos arreglos de $B$ enteros de 32 bits, es decir, $8B$ bytes, independientes del tráfico. No existe ninguna tabla con todas las IPs.</td></tr>
+<tr><td>3. Costo acotado</td><td><code>Registrar</code>: un hash, una comparación y como máximo una llamada a Actualizar, O(1) <em>en el peor caso</em>, sin probing. <code>Vaciar</code>: recorre las $B$ ranuras.</td></tr>
+<tr><td>4. Configurable</td><td>Opción <code>--B</code> de <code>bin/cauchy_intervals</code> (y de <code>bin/verify</code>).</td></tr>
+</table>
+
+<h2>Fracción de llamadas $\phi_B$</h2>
+<p>$$\phi_B = \frac{\text{llamadas a Actualizar (incluidas las de Vaciar)}}{\text{paquetes}}.$$</p>
+<p>Sin caché, $\phi_B=1$. El costo de actualizar se multiplica aproximadamente por $\phi_B$. Los valores medidos están en <a href="05_resultados.html">Resultados</a>.</p>
+
+<h2>Alternativas consideradas</h2>
+<ul>
+<li><strong>Tabla hash con sondeo lineal y expulsión LRU:</strong> tendría más aciertos, pero el costo pasa a ser O(1) solo en esperanza y el código es más complejo.</li>
+<li><strong>Asociativa por conjuntos (2 o 4 vías):</strong> sería un punto intermedio razonable si $\phi_B$ resultara alto con mapeo directo.</li>
+</ul>
+<p>Se eligió el mapeo directo por su simplicidad y su garantía O(1) en el peor caso. Los resultados muestran si basta.</p>
+</main>
+</body>
+</html>

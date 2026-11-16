@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch de Cauchy</title>
+<link rel="stylesheet" href="estilo.css">
+<script>MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<script src="nav.js"></script>
+<main>
+<h1>2. El sketch de Cauchy</h1>
+<p class="sub">Qué es, por qué funciona y cómo está implementado en <code>src/cauchy.hpp</code>.</p>
+
+<h2>La idea en una frase</h2>
+<p>En vez de guardar una tabla IP → cuenta con millones de filas, se guardan <strong>$k$ sumas ponderadas al azar</strong> de las cuentas. Cuando los pesos siguen una distribución de Cauchy, la diferencia de dos de estas listas se comporta como $\|a-b\|_1$ multiplicado por una Cauchy, y la <strong>mediana</strong> de sus valores absolutos estima $\|a-b\|_1$.</p>
+
+<h2>Receta</h2>
+<ol>
+<li><strong>Pesos fijos por IP.</strong> Cada IP $i$ tiene $k$ pesos $C_{1i},\dots,C_{ki}$ con distribución de Cauchy. Son siempre los mismos, en todos los intervalos y en todos los días.</li>
+<li><strong>Actualizar.</strong> La lista $y\in\mathbb R^k$ parte en cero. Por cada paquete de la IP $i$ se hace $y \mathrel{+}= C_{\cdot,i}$. Al final, $y = Cx$.</li>
+<li><strong>Comparar.</strong> $\hat L = \operatorname{mediana}_j |y^a_j - y^b_j|$.</li>
+</ol>
+
+<h2>Por qué funciona: la 1-estabilidad</h2>
+<p>La Cauchy estándar tiene densidad $f(t)=\frac{1}{\pi(1+t^2)}$ y función característica $E[e^{itX}]=e^{-|t|}$. Si $X_1,\dots,X_n$ son i.i.d. Cauchy y $v\in\mathbb R^n$, entonces</p>
+<p>$$E\left[e^{it\sum_i v_iX_i}\right]=\prod_i e^{-|v_i t|} = e^{-\|v\|_1|t|} \;\Rightarrow\; \sum_i v_iX_i \overset{d}{=} \|v\|_1\, X.$$</p>
+<p>Por linealidad, $y^a - y^b = C(a-b)$, y cada coordenada cumple $(y^a-y^b)_j \overset{d}{=} \|a-b\|_1\, X_j$. Como $P(|X|\le 1) = \tfrac{2}{\pi}\arctan 1 = \tfrac12$, la mediana de $|X|$ es exactamente 1, y por eso</p>
+<p>$$\hat L = \operatorname{mediana}_j |(y^a-y^b)_j| \;\longrightarrow\; \|a-b\|_1.$$</p>
+
+<h3>¿Por qué la mediana y no el promedio?</h3>
+<p>La Cauchy no tiene media ($E|X|=\infty$): el promedio de $k$ valores de $|X|$ no converge y unas pocas filas enormes lo arruinan. Por ejemplo, $P(|X|>100)\approx 0{,}6\,\%$, así que con $k=512$ se esperan unas 3 filas más de 100 veces mayores que el valor real. La mediana no se ve afectada por esas filas, y su error relativo es aproximadamente</p>
+<p>$$\operatorname{desv}\!\left(\hat L/\|a-b\|_1\right) \approx \frac{\pi}{2\sqrt k} \;=\; 0{,}28,\ 0{,}14,\ 0{,}07 \quad (k=32,128,512).$$</p>
+<p>Este valor sale del error asintótico de una mediana muestral, $\frac{1}{2f_{|X|}(1)\sqrt k}$, con $f_{|X|}(1) = \frac{2}{\pi}\cdot\frac{1}{2} = \frac1\pi$. A diferencia de CMS y CountSketch, <strong>no depende del volumen de tráfico</strong>: no hay colisiones.</p>
+
+<h2>Una matriz que nunca se guarda</h2>
+<p>$C$ tendría $2^{32}\times 512$ entradas, es decir, 16 TiB. En cambio, cada entrada se <strong>regenera</strong> desde una semilla $\sigma$ de 64 bits con una función hash determinista:</p>
+<pre><code>Mezclar(z):                          // splitmix64, aritmética mod 2^64
+  z += 0x9E3779B97F4A7C15
+  z  = (z ^ (z &gt;&gt; 30)) * 0xBF58476D1CE4E5B9
+  z  = (z ^ (z &gt;&gt; 27)) * 0x94D049BB133111EB
+  return z ^ (z &gt;&gt; 31)
+
+Entrada(σ, j, i):
+  s = Mezclar(σ)            // una vez por sketch
+  g = Mezclar(s ^ j)        // semilla de la fila j; una vez por fila
+  h = Mezclar(g ^ i)
+  u = (floor(h / 2^12) + 1/2) · 2^-52      // u ∈ (0,1), nunca 0 ni 1
+  return tan(π (u − 1/2))                  // transformada inversa de la Cauchy</code></pre>
+<ul>
+<li><strong>Consistencia:</strong> el mismo $(\sigma,j,i)$ da siempre el mismo peso. Por eso las contribuciones de una IP presente en ambos intervalos se cancelan.</li>
+<li><strong>Tres llamadas a Mezclar:</strong> evitan coincidencias estructurales. Con $\text{Mezclar}(\sigma\oplus j\oplus i)$, la fila 1 con la IP 2 y la fila 2 con la IP 1 recibirían el mismo peso. Mezclar $\sigma$ primero evita que las semillas pequeñas generen las mismas filas en otro orden.</li>
+<li><strong>52 bits y no 53:</strong> con 53 bits, $(2^{53}-1)+\tfrac12$ no es representable en un double, se redondearía a $2^{53}$ y daría $u = 1$, con lo que $\tan$ sería infinita.</li>
+</ul>
+
+<h2>Implementación (<code>src/cauchy.hpp</code>)</h2>
+<table>
+<tr><th>Pieza del enunciado</th><th>Código</th><th>Detalle</th></tr>
+<tr><td>Mezclar</td><td><code>cauchy::mezclar</code></td><td>Literal del pseudocódigo, con <code>uint64_t</code> (aritmética mod $2^{64}$).</td></tr>
+<tr><td>Entrada</td><td><code>cauchy::entrada</code></td><td>Versión de referencia. El sketch precalcula las $k$ semillas de fila $g_j$ (vector <code>g</code>), lo que equivale a la nota "una vez por fila". Las filas son 1-indexadas, como en el PDF.</td></tr>
+<tr><td>Inicializar</td><td><code>Sketch(k, σ)</code></td><td><code>y</code> = $k$ doubles en cero.</td></tr>
+<tr><td>Actualizar(S,i,c)</td><td><code>Sketch::actualizar</code></td><td>Suma $c\cdot C_{ji}$ en cada fila y cuenta las llamadas (para $\phi_B$).</td></tr>
+<tr><td>EstimarDistancia</td><td><code>estimar_distancia</code></td><td>Exige el mismo $k$ y la misma $\sigma$. Calcula la mediana con <code>nth_element</code>; si $k$ es par, promedia los dos valores centrales. Acepta un prefijo $k'$: las primeras $k'$ filas forman un sketch válido de $k'$ filas.</td></tr>
+</table>
+<div class="nota"><strong>Valores de referencia verificados:</strong> <code>Mezclar(0) = 0xE220A8397B1DCDAF</code>; <code>Entrada(42, 1..3, 192.168.0.1)</code> = −0,889927650; −2,088573016; −26,926917514. Todos coinciden en <code>bin/verify</code>.</div>
+
+<h2>Ejemplo del enunciado ($k=3$)</h2>
+<p>El lunes: A×3, B×1. El martes: A×1, C×2. La diferencia es $2A + 1B - 2C$, y el valor exacto es $|3-1|+|1-0|+|0-2|=5$. Restando las listas se obtiene (−1,9; −5,6; 8,0); la mediana de los valores absolutos es 5,6. La IP A, presente ambos días, se cancela en parte porque usa los mismos pesos.</p>
+</main>
+</body>
+</html>

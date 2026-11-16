@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informe y preguntas</title>
+<link rel="stylesheet" href="estilo.css">
+<script>MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+<script src="nav.js"></script>
+<main>
+<h1>6. Informe y preguntas obligatorias</h1>
+<p class="sub">Respuestas basadas en nuestros resultados, estructura de <code>informe/main.tex</code> y checklist de entrega.</p>
+
+<h2>Respuestas a las preguntas</h2>
+<div class="card">
+<h3>1. ¿Por qué la 1-estabilidad permite estimar $\|a-b\|_1$ con la mediana, y por qué no sirve el promedio?</h3>
+<p>Por linealidad, $y^a-y^b = C(a-b)$. Por 1-estabilidad, cada fila es $\|a-b\|_1 X_j$ con $X_j$ Cauchy, es decir, una medición de L multiplicada por un factor aleatorio. Como $P(|X|\le 1) = \tfrac{2}{\pi}\arctan 1 = \tfrac12$, la mediana de $|X_j|$ es exactamente 1, y la mediana de las $k$ mediciones converge a L con error $\pi/(2\sqrt k)$. El promedio no sirve porque $E|X| = \infty$: no converge, y unas pocas filas gigantes lo dominan. En nuestros pesos, el cuantil 0,999 de |C| vale 650.</p>
+</div>
+<div class="card">
+<h3>2. ¿Coincide el error con $\pi/(2\sqrt k)$? ¿Depende de T? Comparación con CMS y CountSketch</h3>
+<p>Sí: la desviación de $\hat L/L$ es 0,26–0,30, 0,10–0,14 y 0,060–0,073 frente a 0,278, 0,139 y 0,069, y <strong>no depende de T</strong>, aunque $L_q$ varía en un factor 10 entre T = 10 y 120 s. En la Tarea 1, el error de CMS escalaba como $\|f\|_1/w$ y el de CountSketch como $\|f\|_2/\sqrt w$: dependía del tráfico y de las colisiones. Aquí la garantía es multiplicativa y está fijada solo por k (7 % con 4 KiB por sketch), pero para bajar al 1 % harían falta unas 25.000 filas.</p>
+</div>
+<div class="card">
+<h3>3. ¿Por qué dos routers deben usar la misma semilla?</h3>
+<p>La resta solo cancela el tráfico compartido si cada IP usa la misma columna $C_{\cdot,i}$ en ambos sketches. Con semillas distintas, $C_1a - C_2b$ estima $\|a\|_1+\|b\|_1$. Lo medimos en minutos consecutivos del día 26: $\hat L = 0{,}98\,(N_q+N_{q-1}) = 2{,}54\,L$. Con la misma σ, dos routers comparten la matriz sin transmitirla y basta enviar k números.</p>
+</div>
+<div class="card">
+<h3>4. ¿Qué agrega $\|a-b\|_1$ respecto de $|N_a-N_b|$?</h3>
+<p>$|N_a-N_b|$ solo detecta cambios de volumen. Entre minutos consecutivos del día 26, $L_q \approx 5$ M mientras $|N_q-N_{q-1}|$ va de 0,06 a 0,58 M; entre días, L = 205,7 M frente a 1,5 M. Un cambio que $|N_a - N_b|$ no detecta: un DDoS que desvía 1 M paquetes de un servidor legítimo hacia una víctima, o un escaneo como el del día 30 que coincida con una caída equivalente del tráfico normal. N queda igual, pero L sube en 2 M.</p>
+</div>
+
+<h2>Estructura del informe (<code>informe/main.tex</code>)</h2>
+<p>Formato IEEEtran a dos columnas, como en la Tarea 1. Las figuras se leen desde <code>../resultados/figuras/</code>.</p>
+<ol>
+<li><strong>Encabezado:</strong> integrantes y URL del repositorio.</li>
+<li><strong>Implementación:</strong> lenguaje, aceleraciones (semillas de fila precalculadas, prefijos de k, todos los T en una pasada), diseño de la caché (pseudocódigo, invariante y exactitud), verificación y referencia exacta.</li>
+<li><strong>Intervalos consecutivos:</strong> tabla de error, memoria, D y Q−2, figuras de error vs k y de r<sub>q</sub>, tabla de φ<sub>B</sub> y throughput.</li>
+<li><strong>Comparación entre días:</strong> 25 vs 26, anonimización, semillas distintas, contraste con el día 30 (perfil y escaneo DNS).</li>
+<li><strong>Preguntas</strong> 1 a 4 y <strong>Conclusiones</strong>.</li>
+</ol>
+
+<h2>Checklist de entrega</h2>
+<table>
+<tr><th>Ítem</th><th>Estado</th></tr>
+<tr><td>Código del sketch, la referencia exacta y los experimentos</td><td class="ok">Listo</td></tr>
+<tr><td><code>README.md</code> (dependencias, trazas, programas, resultados, tiempos)</td><td class="ok">Listo</td></tr>
+<tr><td><code>reproducir.sh</code> comentado</td><td class="ok">Listo (probado de punta a punta)</td></tr>
+<tr><td>URLs de las trazas y semillas en el README</td><td class="ok">Listo</td></tr>
+<tr><td>Integrantes del grupo en el informe</td><td>Por confirmar</td></tr>
+<tr><td>Compilar el PDF y revisar que no pase de 6 páginas</td><td>Pendiente: no hay LaTeX instalado (usar Overleaf o instalar TeX Live)</td></tr>
+<tr><td>Presentación oral de 10 minutos</td><td>Pendiente</td></tr>
+</table>
+</main>
+</body>
+</html>
